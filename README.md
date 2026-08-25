@@ -33,15 +33,20 @@ this README calls it the fn key.
 
 ## How it works
 
-```
-fn down  ->  mic on (AVAudioEngine, 16 kHz mono)
-fn up    ->  samples sent to a resident sherpa-onnx websocket server
-            ->  cleanup rules  ->  pasteboard + Cmd+V  ->  pasteboard restored
-```
+1. Press and hold the fn key. The mic turns on and the menu bar icon turns
+   red. Keep holding while you talk.
+2. Let go of the key. The mic turns off and the icon turns orange while the
+   speech model on your Mac turns the audio into text. That takes about half
+   a second for a short sentence.
+3. The text gets a quick cleanup (a period at the end, a capital first
+   letter, your dictionary fixes) and is pasted where your cursor is, the
+   same as if you had pressed Cmd+V. Whatever was on your clipboard before
+   is put back.
 
-The speech server is spawned once at launch and stays warm, so the 660 MB
-model loads one time, not per dictation. The model itself is downloaded on
-first run into `~/Library/Application Support/YTT/models/`.
+Under the hood: the speech model (NVIDIA Parakeet, run by sherpa-onnx) is
+loaded once when YTT starts and stays in memory, so there is no delay when
+you press the key. It is downloaded on first run into
+`~/Library/Application Support/YTT/models/`.
 
 ## Requirements and what to expect
 
