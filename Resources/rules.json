@@ -1,0 +1,22 @@
+{
+  "_about": "YTT cleanup rules. Edit by hand, no rebuild needed, YTT reloads it on the next dictation. Set any rule to false to switch it off.",
+  "rules": {
+    "dictionary": true,
+    "spaceBeforeCurrency": true,
+    "capitalizeFirst": true,
+    "terminalPunctuation": true,
+    "questionMark": true,
+    "hotwords": true
+  },
+  "_dictionary_help": "Each entry: 'to' is the correct spelling. 'from' lists wrong spellings to replace (whole words, any case). Without 'from', the word is matched case-insensitively and its casing fixed. Every 'to' is also sent to the speech model as a hotword (needs a relaunch). Add your own name and the products or people you mention often.",
+  "dictionary": [
+    { "to": "YTT", "from": ["y t t", "why tt", "why t t"] },
+    { "to": "Parakeet", "from": ["parakey", "para keet"] },
+    { "to": "Claude Code", "from": ["cloud code", "claud code"] },
+    { "to": "GitHub", "from": ["get hub", "git hub"] },
+    { "to": "macOS", "from": ["mac os", "mac o s"] },
+    { "to": "iPhone", "from": ["i phone"] },
+    { "to": "JSON", "from": ["jason", "j s o n"] },
+    { "to": "API", "from": ["a p i"] }
+  ]
+}

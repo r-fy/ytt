@@ -1,0 +1,37 @@
+#!/bin/sh
+# Fetch sherpa-onnx 1.13.4 (the version OpenWhispr ships), keep only the
+# offline websocket server and its libraries, and ad-hoc sign them.
+# Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime, and
+# dyld SIGKILLs the process on load without the re-sign.
+#
+# Output: vendor/sherpa/bin/sherpa-onnx-offline-websocket-server
+#         vendor/sherpa/lib/*.dylib
+set -e
+cd "$(dirname "$0")/.."
+
+VERSION=1.13.4
+NAME="sherpa-onnx-v${VERSION}-osx-universal2-shared"
+URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${VERSION}/${NAME}.tar.bz2"
+ARCHIVE="vendor/sherpa-${VERSION}.tar.bz2"
+OUT=vendor/sherpa
+
+mkdir -p vendor
+if [ ! -f "$ARCHIVE" ]; then
+    echo "downloading $URL"
+    curl -sSL -o "$ARCHIVE" "$URL"
+fi
+
+rm -rf "$OUT" vendor/"$NAME"
+tar -xjf "$ARCHIVE" -C vendor \
+    "$NAME/bin/sherpa-onnx-offline-websocket-server" \
+    "$NAME/lib/libsherpa-onnx-c-api.dylib" \
+    "$NAME/lib/libsherpa-onnx-cxx-api.dylib" \
+    "$NAME/lib/libonnxruntime.1.27.0.dylib" \
+    "$NAME/lib/libonnxruntime.dylib"
+mv vendor/"$NAME" "$OUT"
+
+for f in "$OUT"/bin/* "$OUT"/lib/*.dylib; do
+    codesign --force --sign - "$f" 2>/dev/null
+done
+
+echo "sherpa $VERSION ready in $OUT"

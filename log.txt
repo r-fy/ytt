@@ -1,0 +1,22 @@
+[2026-08-24 16:09:45] [connect] WebSocket Connection 127.0.0.1:52860 v13 "" / 101
+[2026-08-24 16:09:45] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:11:57] [connect] WebSocket Connection 127.0.0.1:52926 v13 "audio-spike (unknown version) CFNetwork/3860.700.1 Darwin/25.6.0" / 101
+[2026-08-24 16:11:57] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:13:03] [connect] WebSocket Connection 127.0.0.1:52955 v13 "audio-spike (unknown version) CFNetwork/3860.700.1 Darwin/25.6.0" / 101
+[2026-08-24 16:13:06] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:01] [connect] WebSocket Connection 127.0.0.1:53545 v13 "" / 101
+[2026-08-24 16:47:01] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:01] [connect] WebSocket Connection 127.0.0.1:53546 v13 "" / 101
+[2026-08-24 16:47:02] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:02] [connect] WebSocket Connection 127.0.0.1:53547 v13 "" / 101
+[2026-08-24 16:47:02] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:24] [connect] WebSocket Connection 127.0.0.1:53550 v13 "" / 101
+[2026-08-24 16:47:25] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:25] [connect] WebSocket Connection 127.0.0.1:53551 v13 "" / 101
+[2026-08-24 16:47:25] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:25] [connect] WebSocket Connection 127.0.0.1:53552 v13 "" / 101
+[2026-08-24 16:47:26] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:26] [connect] WebSocket Connection 127.0.0.1:53553 v13 "" / 101
+[2026-08-24 16:47:26] [disconnect] Disconnect close local:[1000,Done] remote:[1000]
+[2026-08-24 16:47:34] [connect] WebSocket Connection 127.0.0.1:53558 v13 "" / 101
+[2026-08-24 16:47:35] [disconnect] Disconnect close local:[1000,Done] remote:[1000]

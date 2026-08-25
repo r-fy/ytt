@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>local.ytt.audio-spike</string>
+    <key>CFBundleName</key>
+    <string>audio-spike</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>YTT records your voice while you hold the Globe key.</string>
+</dict>
+</plist>
