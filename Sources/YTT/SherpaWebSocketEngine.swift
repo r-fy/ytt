@@ -6,6 +6,12 @@ import Foundation
 // One text frame back (JSON with "text", or bare text), then we send "Done".
 final class SherpaWebSocketEngine: Transcriber {
     private let process: SherpaProcess
+    private let session: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 30
+        cfg.timeoutIntervalForResource = 60
+        return URLSession(configuration: cfg)
+    }()
 
     init(serverBinary: URL, modelDir: URL) {
         process = SherpaProcess(serverBinary: serverBinary, modelDir: modelDir)
@@ -31,14 +37,26 @@ final class SherpaWebSocketEngine: Transcriber {
 
     func transcribe(samples: [Float], completion: @escaping (Result<String, Error>) -> Void) {
         let url = URL(string: "ws://127.0.0.1:\(process.port)")!
-        let task = URLSession.shared.webSocketTask(with: url)
+        let task = session.webSocketTask(with: url)
         task.resume()
+        let lock = NSLock()
         var done = false
-        let finish: (Result<String, Error>) -> Void = { r in
-            guard !done else { return }
+        let finish: (Result<String, Error>) -> Void = { [weak self] r in
+            lock.lock()
+            let first = !done
             done = true
+            lock.unlock()
+            guard first else { return }
             task.send(.string("Done")) { _ in task.cancel(with: .normalClosure, reason: nil) }
-            DispatchQueue.main.async { completion(r) }
+            DispatchQueue.main.async {
+                if case .success = r { self?.process.noteSuccess() }
+                completion(r)
+            }
+        }
+        // Watchdog: a server that accepts the audio but never answers must
+        // not leave the app stuck on "Transcribing" forever.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+            finish(.failure(NSError(domain: "YTT", code: 3, userInfo: [NSLocalizedDescriptionKey: "no reply from the speech server in 30 s"])))
         }
         task.send(.data(SherpaWebSocketEngine.payload(samples: samples, sampleRate: Int32(AudioRecorder.sampleRate)))) { error in
             if let error { return finish(.failure(error)) }

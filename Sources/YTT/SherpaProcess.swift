@@ -32,6 +32,7 @@ final class SherpaProcess {
     func start() {
         stopping = false
         isReady = false
+        SherpaProcess.killOrphans(of: serverBinary)
         port = SherpaProcess.freePort()
         startedAt = Date()
         let m = modelDir.path
@@ -54,6 +55,16 @@ final class SherpaProcess {
                 "--bpe-vocab=\(bpeVocabFile.path)",
             ]
         }
+        // The server has no bind-address flag and would listen on every
+        // interface. libbindfix rewrites its wildcard bind to 127.0.0.1.
+        let bindfix = serverBinary.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lib/libbindfix.dylib")
+        var env = ProcessInfo.processInfo.environment
+        env["DYLD_INSERT_LIBRARIES"] = bindfix.path
+        p.environment = env
+        // The server writes a connection log named log.txt into its working
+        // directory. Keep that out of the repo and out of the user's folders.
+        p.currentDirectoryURL = FileManager.default.temporaryDirectory
         let stderrPipe = Pipe()
         p.standardError = stderrPipe
         p.standardOutput = FileHandle.nullDevice
@@ -64,7 +75,7 @@ final class SherpaProcess {
                 DispatchQueue.main.async { self?.markReady() }
             }
             if text.lowercased().contains("error") {
-                Log.warn("sherpa: \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
+                Log.warn("sherpa: \(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300))")
             }
         }
         p.terminationHandler = { [weak self] proc in
@@ -80,17 +91,29 @@ final class SherpaProcess {
         }
     }
 
+    // Polite terminate, then SIGKILL if it lingers, so no 1 GB orphan survives us.
     func stop() {
         stopping = true
-        if let process, process.isRunning { process.terminate() }
-        process = nil
         isReady = false
+        guard let process, process.isRunning else { self.process = nil; return }
+        let pid = process.processIdentifier
+        process.terminate()
+        let deadline = Date().addingTimeInterval(2)
+        while process.isRunning && Date() < deadline { usleep(50_000) }
+        if process.isRunning { kill(pid, SIGKILL) }
+        self.process = nil
+    }
+
+    // Called after a successful transcription: the server is proven healthy,
+    // so the restart budget resets. Resetting on "Started!" alone would let a
+    // server that loads fine but crashes on every decode respawn forever.
+    func noteSuccess() {
+        restarts = 0
     }
 
     private func markReady() {
         guard !isReady else { return }
         isReady = true
-        restarts = 0
         Log.info("SHERPA_READY loadTime=\(Int(Date().timeIntervalSince(startedAt) * 1000))ms")
         onReady?()
     }
@@ -100,10 +123,32 @@ final class SherpaProcess {
         guard !stopping else { return }
         Log.warn("SHERPA_EXITED status=\(proc.terminationStatus)")
         onDied?()
-        // Three tries with a short pause, then give up and show the error state.
-        guard restarts < 3 else { return }
+        guard restarts < 3 else {
+            Log.warn("sherpa died 3 times, giving up until relaunch")
+            return
+        }
         restarts += 1
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.start() }
+    }
+
+    // A force-quit or crash of YTT skips stop(), leaving a server behind.
+    // Reap any process running our bundled binary before spawning a new one.
+    static func killOrphans(of binary: URL) {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        p.arguments = ["-f", binary.path]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return }
+        p.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        for line in out.split(separator: "\n") {
+            if let pid = Int32(line.trimmingCharacters(in: .whitespaces)), pid != getpid() {
+                Log.warn("killing orphaned sherpa pid=\(pid)")
+                kill(pid, SIGKILL)
+            }
+        }
     }
 
     // Bind port 0 on loopback, read back what the kernel picked, release it.

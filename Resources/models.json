@@ -7,7 +7,8 @@
       "name": "Parakeet TDT 0.6B v3 (English, int8)",
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming.tar.bz2",
       "extractDir": "sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming",
-      "sizeMb": 663
+      "sizeMb": 663,
+      "sha256": "99f63605b3a85a54c250c0869670a687b7d6598a47bf2421515e1f839a76e150"
     }
   ]
 }

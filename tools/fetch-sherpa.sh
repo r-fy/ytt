@@ -12,13 +12,22 @@ cd "$(dirname "$0")/.."
 VERSION=1.13.4
 NAME="sherpa-onnx-v${VERSION}-osx-universal2-shared"
 URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${VERSION}/${NAME}.tar.bz2"
+SHA256=02b9b0cf30819a18c6d5cf861aebf32336cb79958ab97a2b248227059678058b
 ARCHIVE="vendor/sherpa-${VERSION}.tar.bz2"
 OUT=vendor/sherpa
 
 mkdir -p vendor
 if [ ! -f "$ARCHIVE" ]; then
     echo "downloading $URL"
-    curl -sSL -o "$ARCHIVE" "$URL"
+    # Download to a .part file so an interrupted transfer never leaves a
+    # truncated archive that every later build trips over.
+    curl -sSL -o "$ARCHIVE.part" "$URL"
+    mv "$ARCHIVE.part" "$ARCHIVE"
+fi
+
+if ! echo "$SHA256  $ARCHIVE" | shasum -a 256 -c - >/dev/null 2>&1; then
+    echo "error: $ARCHIVE does not match the expected checksum. Delete it and rerun." >&2
+    exit 1
 fi
 
 rm -rf "$OUT" vendor/"$NAME"

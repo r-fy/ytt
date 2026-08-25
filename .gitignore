@@ -6,3 +6,4 @@ spike/globe-spike
 spike/audio-spike
 spike/transcribe-spike
 spike/*.log
+log.txt

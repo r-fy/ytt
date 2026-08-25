@@ -1,6 +1,6 @@
-# Phase 0 spike: Globe key listener
+# Phase 0 spike: fn key listener
 
-Standalone test of the Fn/Globe key listener, cut down from OpenWhispr's
+Standalone test of the fn key listener, cut down from OpenWhispr's
 `resources/macos-globe-listener.swift` (MIT). No app bundle.
 
 Files: `GlobeListener.swift` (shared), `globe/main.swift` (Phase 0),
@@ -17,10 +17,10 @@ Run (quit OpenWhispr first, both apps fight over the same key):
     ./spike/audio-spike  (same flags; writes /tmp/ytt-last.wav on release)
 
 Output lines: `FN_DOWN`, `FN_UP held=<ms>`, `FN_INTERRUPTED keyCode=<n>`.
-Ctrl+C or SIGTERM restores the Globe key's normal action. A leftover marker
+Ctrl+C or SIGTERM restores the fn key's normal action. A leftover marker
 file from a crash is picked up on the next run so the original value is not lost.
 
-Recovery if the Globe key ever stays dead: System Settings > Keyboard >
+Recovery if the fn key ever stays dead: System Settings > Keyboard >
 "Press globe key to", pick the action you want.
 
 ## Phase 0 results (2026-08-24, macOS 26, Apple Silicon)
@@ -30,7 +30,7 @@ Recovery if the Globe key ever stays dead: System Settings > Keyboard >
    (TISGetFnUsageType / TISUpdateFnUsageType) still work on macOS 26.
 3. FN_INTERRUPTED: cannot be tested on this Mac. While Globe is held, macOS
    delivers no other key event to any listener, not even a raw CGEvent tap.
-   Globe+K types nothing and Globe+arrow does not move the cursor, with or
+   fn+K types nothing and fn+arrow does not move the cursor, with or
    without the spike running. The code stays because it is harmless and
    upstream-proven, but it is unverified here.
 4. Ctrl+C (SIGINT) restores the Globe action and removes the marker: pass.
@@ -45,7 +45,7 @@ Other facts learned:
 - OpenWhispr's marker lives at
   ~/Library/Application Support/open-whispr/globe-preference-state.json.
   Quit OpenWhispr before running the spike.
-- Globe+A, C, N, H, F, M, Q, E are macOS system shortcuts (Dock, Control
+- fn+A, C, N, H, F, M, Q, E are macOS system shortcuts (Dock, Control
   Center, etc). Never use those as test keys.
 
 ## Phase 1 results (2026-08-24)

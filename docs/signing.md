@@ -38,7 +38,11 @@ security create-keychain -p "choose-any-password" "$KC"
 security set-keychain-settings "$KC"            # never auto-lock
 security import ytt.p12 -k "$KC" -P ytt -T /usr/bin/codesign -T /usr/bin/security
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "choose-any-password" "$KC"
-security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db" "$KC"
+# Append the new keychain to the search list (the -s flag replaces the list,
+# so the current entries are passed back in).
+security list-keychains -d user -s $(security list-keychains -d user | tr -d '"') "$KC"
+# This marks the self-signed certificate as trusted for code signing on
+# your account, which is what lets a rebuild keep its permissions.
 security add-trusted-cert -p codeSign -k "$KC" ytt.crt
 
 rm -f ytt.key ytt.p12

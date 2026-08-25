@@ -11,7 +11,9 @@ final class ModelStore: NSObject, URLSessionDownloadDelegate {
         let downloadUrl: URL
         let extractDir: String
         let sizeMb: Int
+        let sha256: String?
     }
+    static let requiredFiles = ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx"]
     private struct Manifest: Decodable {
         let `default`: String
         let models: [Model]
@@ -39,16 +41,23 @@ final class ModelStore: NSObject, URLSessionDownloadDelegate {
     var modelDir: URL { ModelStore.root.appendingPathComponent(model.extractDir) }
     private var markerURL: URL { modelDir.appendingPathComponent(".installed.json") }
 
-    var isInstalled: Bool {
-        let required = ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx"]
-        let filesOK = required.allSatisfy { FileManager.default.fileExists(atPath: modelDir.appendingPathComponent($0).path) }
-        return filesOK && FileManager.default.fileExists(atPath: markerURL.path)
+    private var filesPresent: Bool {
+        ModelStore.requiredFiles.allSatisfy { name in
+            let attrs = try? FileManager.default.attributesOfItem(atPath: modelDir.appendingPathComponent(name).path)
+            return ((attrs?[.size] as? Int) ?? 0) > 0
+        }
+        // The encoder is the 650 MB file. Anything under 100 MB is a truncated copy.
+        && (((try? FileManager.default.attributesOfItem(atPath: modelDir.appendingPathComponent("encoder.int8.onnx").path))?[.size] as? Int) ?? 0) > 100_000_000
     }
 
-    // The pre-existing copy from OpenWhispr's cache has no marker. Adopt it.
+    var isInstalled: Bool {
+        filesPresent && FileManager.default.fileExists(atPath: markerURL.path)
+    }
+
+    // A copy placed by hand (or by an older version) has no marker. Adopt it
+    // only when every file is there and the encoder has a plausible size.
     func adoptExistingIfPresent() {
-        guard !FileManager.default.fileExists(atPath: markerURL.path),
-              FileManager.default.fileExists(atPath: modelDir.appendingPathComponent("encoder.int8.onnx").path) else { return }
+        guard !FileManager.default.fileExists(atPath: markerURL.path), filesPresent else { return }
         writeMarker(sha: "adopted-from-existing-files")
         Log.info("MODEL adopted existing files in \(modelDir.lastPathComponent)")
     }
@@ -98,12 +107,23 @@ final class ModelStore: NSObject, URLSessionDownloadDelegate {
 
     private func install(archive: URL) throws {
         let sha = try ModelStore.sha256(of: archive)
+        if let expected = model.sha256, expected.lowercased() != sha {
+            throw NSError(domain: "YTT", code: 4, userInfo: [NSLocalizedDescriptionKey: "downloaded archive does not match the expected checksum"])
+        }
         try FileManager.default.createDirectory(at: ModelStore.root, withIntermediateDirectories: true)
-        try? FileManager.default.removeItem(at: modelDir)
-        // System tar handles bzip2, no library needed.
+        // Extract into a staging folder and move into place only on success,
+        // so a disk-full or interrupted extract never leaves a half model
+        // that a later launch could mistake for a good one.
+        let staging = ModelStore.root.appendingPathComponent(".staging-\(model.id)")
+        try? FileManager.default.removeItem(at: staging)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+        // System tar handles bzip2, no library needed. bsdtar refuses ".."
+        // entries by default, which is the only path-traversal protection
+        // here: never add -P.
         let tar = Process()
         tar.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
-        tar.arguments = ["-xjf", archive.path, "-C", ModelStore.root.path]
+        tar.arguments = ["-xjf", archive.path, "-C", staging.path]
         tar.standardOutput = FileHandle.nullDevice
         tar.standardError = FileHandle.nullDevice
         try tar.run()
@@ -111,9 +131,12 @@ final class ModelStore: NSObject, URLSessionDownloadDelegate {
         guard tar.terminationStatus == 0 else {
             throw NSError(domain: "YTT", code: 1, userInfo: [NSLocalizedDescriptionKey: "tar exited \(tar.terminationStatus)"])
         }
-        guard FileManager.default.fileExists(atPath: modelDir.appendingPathComponent("encoder.int8.onnx").path) else {
+        let extracted = staging.appendingPathComponent(model.extractDir)
+        guard ModelStore.requiredFiles.allSatisfy({ FileManager.default.fileExists(atPath: extracted.appendingPathComponent($0).path) }) else {
             throw NSError(domain: "YTT", code: 2, userInfo: [NSLocalizedDescriptionKey: "archive did not contain \(model.extractDir)"])
         }
+        try? FileManager.default.removeItem(at: modelDir)
+        try FileManager.default.moveItem(at: extracted, to: modelDir)
         writeMarker(sha: sha)
     }
 

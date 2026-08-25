@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
     private lazy var cleanup = CleanupPipeline(rules: rules)
     private let modelStore = ModelStore()
     private var signalSources: [DispatchSourceSignal] = []
+    private var targetAtRelease: pid_t?
     static let lastAudioPath = NSHomeDirectory() + "/Library/Application Support/YTT/last.wav"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -24,6 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
         )
         engine.onReady = { [weak self] in self?.statusBar.set(.idle) }
         engine.onDied = { [weak self] in self?.statusBar.set(.error("Speech engine stopped")) }
+
+        if !AXIsProcessTrusted() {
+            // Shows the system prompt that deep-links to the Accessibility pane.
+            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            AXIsProcessTrustedWithOptions(opts)
+            statusBar.blockingIssue = "Grant Accessibility, then quit and reopen YTT"
+        }
 
         modelStore.adoptExistingIfPresent()
         if modelStore.isInstalled {
@@ -43,16 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
         recorder.onCapReached = { [weak self] in self?.finishRecording(discard: false) }
 
         // Ask for the mic now so the first hold never races a permission dialog.
-        AudioRecorder.requestPermission { ok in
+        AudioRecorder.requestPermission { [weak self] ok in
             Log.info("MIC_PERMISSION \(ok ? "granted" : "DENIED")")
-            if !ok { self.statusBar.set(.error("Microphone permission missing")) }
-        }
-
-        if !AXIsProcessTrusted() {
-            // Shows the system prompt that deep-links to the Accessibility pane.
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(opts)
-            statusBar.set(.error("Grant Accessibility, then relaunch"))
+            if !ok { self?.statusBar.blockingIssue = "Microphone permission missing (System Settings > Privacy & Security)" }
         }
 
         globe.delegate = self
@@ -93,7 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
     }
 
     func globeKeyUp(interrupted: Bool, heldSeconds: Double) {
+        guard recorder.isRecording else { return }
         Log.info("FN_UP held=\(Int(heldSeconds * 1000))ms")
+        targetAtRelease = NSWorkspace.shared.frontmostApplication?.processIdentifier
         finishRecording(discard: interrupted)
     }
 
@@ -111,15 +114,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
         // Kept for debugging and for A/B tests on the same audio. One file, overwritten.
         AudioRecorder.saveWav(samples, to: AppDelegate.lastAudioPath)
         let t0 = Date()
+        let target = targetAtRelease
         engine.transcribe(samples: samples) { [weak self] result in
             guard let self else { return }
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
             switch result {
             case .success(let text):
-                Log.info("TEXT decode=\(ms)ms audio=\(String(format: "%.2f", Double(samples.count) / AudioRecorder.sampleRate))s \"\(text)\"")
+                // The words themselves go to history.jsonl, not the log.
+                Log.info("TEXT decode=\(ms)ms audio=\(String(format: "%.2f", Double(samples.count) / AudioRecorder.sampleRate))s chars=\(text.count)")
                 let cleaned = self.cleanup.run(text)
                 if !cleaned.isEmpty {
-                    TextInjector.insert(cleaned)
+                    TextInjector.insert(cleaned, intendedTarget: target)
                     self.statusBar.setLast(cleaned)
                     History.record(
                         app: NSWorkspace.shared.frontmostApplication?.localizedName ?? "?",

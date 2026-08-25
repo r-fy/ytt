@@ -17,7 +17,7 @@ final class CleanupPipeline {
         for (name, stage) in stages {
             let before = text
             text = stage(text)
-            if text != before { Log.info("CLEANUP \(name): \"\(text)\"") }
+            if text != before { Log.info("CLEANUP \(name) changed the text") }
         }
         return text
     }

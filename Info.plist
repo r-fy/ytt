@@ -25,6 +25,6 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>YTT records your voice while you hold the Globe key.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Personal tool, not for distribution.</string>
+	<string>MIT License. https://github.com/r-fy/ytt</string>
 </dict>
 </plist>

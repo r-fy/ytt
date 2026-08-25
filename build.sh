@@ -29,6 +29,11 @@ cp Resources/models.json "$APP/Contents/Resources/models.json"
 cp vendor/sherpa/bin/sherpa-onnx-offline-websocket-server "$APP/Contents/Resources/bin/"
 cp vendor/sherpa/lib/*.dylib "$APP/Contents/Resources/lib/"
 
+# The server has no bind-address option and would listen on every network
+# interface. This small library is loaded into it and pins it to 127.0.0.1.
+clang -O2 -dynamiclib -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 \
+  -o "$APP/Contents/Resources/lib/libbindfix.dylib" tools/bindfix.c
+
 # A fixed self-signed identity keeps the signature stable across rebuilds so
 # macOS keeps the Accessibility and Microphone grants (plan risk R3, confirmed
 # to bite with ad-hoc signing). Created once with openssl + security import,

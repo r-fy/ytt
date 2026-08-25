@@ -4,7 +4,7 @@ enum AppState {
     case warming, downloading(Double), idle, recording, transcribing, error(String)
 }
 
-final class StatusBarController {
+final class StatusBarController: NSObject, NSMenuDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let stateLine = NSMenuItem(title: "Starting", action: nil, keyEquivalent: "")
     private let permissionLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -12,8 +12,16 @@ final class StatusBarController {
 
     var onQuit: (() -> Void)?
 
-    init() {
+    // A missing permission is sticky: progress and "ready" updates must not
+    // paint over it, or a fresh install says Ready while nothing works.
+    var blockingIssue: String? {
+        didSet { if let blockingIssue { set(.error(blockingIssue)) } }
+    }
+
+    override init() {
+        super.init()
         let menu = NSMenu()
+        menu.delegate = self
         menu.addItem(stateLine)
         menu.addItem(permissionLine)
         menu.addItem(lastLine)
@@ -38,11 +46,20 @@ final class StatusBarController {
     }
 
     func set(_ state: AppState) {
+        if let blockingIssue {
+            switch state {
+            case .error: break
+            default:
+                // Keep showing the blocker, but let the tooltip show what is happening underneath.
+                item.button?.toolTip = blockingIssue
+                return
+            }
+        }
         let (symbol, text): (String, String)
         switch state {
         case .warming: (symbol, text) = ("hourglass", "Loading speech model")
         case .downloading(let p): (symbol, text) = ("arrow.down.circle", "Downloading speech model \(Int(p * 100))%")
-        case .idle: (symbol, text) = ("mic", "Ready. Hold Globe to talk")
+        case .idle: (symbol, text) = ("mic", "Ready. Hold the fn key to talk")
         case .recording: (symbol, text) = ("mic.fill", "Recording")
         case .transcribing: (symbol, text) = ("ellipsis.circle", "Transcribing")
         case .error(let msg): (symbol, text) = ("exclamationmark.triangle", msg)
@@ -75,8 +92,12 @@ final class StatusBarController {
     }
 
     func refreshPermissions() {
-        let ax = AXIsProcessTrusted() ? "granted" : "MISSING"
+        let ax = AXIsProcessTrusted() ? "granted" : "MISSING (System Settings > Privacy & Security)"
         permissionLine.title = "Accessibility: \(ax)"
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshPermissions()
     }
 
     @objc private func openRules() {

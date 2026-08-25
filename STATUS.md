@@ -1,6 +1,6 @@
 # YTT status
 
-Native Swift menu bar app. Hold Globe, talk, release, words land at the cursor.
+Native Swift menu bar app. Hold fn, talk, release, words land at the cursor.
 Speech: Parakeet 0.6B through a resident sherpa-onnx websocket server.
 
 ## Build and install
@@ -13,7 +13,7 @@ Log: `~/Library/Logs/YTT.log`. Quit from the menu bar icon or `pkill YTT`.
 
 ## Phase log
 
-- Phase 0 (2026-08-24): Globe key spike passes. See `spike/README.md`.
+- Phase 0 (2026-08-24): fn key spike passes. See `spike/README.md`.
 - Phase 1 (2026-08-24): record while held, 16 kHz WAV. Mic opens in 130 to 240 ms.
 - Phase 2 (2026-08-24): transcribe via vendored sherpa 1.13.4. 5 s in 0.5 s, 34 s in 2.5 s.
 - Phase 3 (2026-08-24): app bundle. Listener folded in-process (decided by the Phase 0 sleep test).
@@ -71,12 +71,27 @@ relaunch, and grant again.
 - On the test Mac (macOS 26, external USB keyboard), macOS delivers no key
   events while Globe is held, so FN_INTERRUPTED never fires. Kept as a
   safety net.
-- Globe+A/C/N/H/F/M/Q/E are system shortcuts. Never use as test keys.
+- fn+A/C/N/H/F/M/Q/E are system shortcuts. Never use as test keys.
 - While YTT runs it holds the system Globe action at "Do Nothing" and puts
   the original back on quit. Any other app doing the same (OpenWhispr does)
-  must be quit first. If the Globe key ever stays dead: System Settings >
+  must be quit first. If the fn key ever stays dead: System Settings >
   Keyboard > "Press globe key to".
 - Clipboard managers see every dictation, because the paste goes through the
   pasteboard.
 - Playback of `last.wav` with `afplay` goes to the default output device,
   which on a USB mic with a headphone jack may be the mic itself.
+
+## Public release hardening (2026-08-24)
+
+Second reviewer pass before sharing found and fixed: sherpa listened on all
+interfaces (now pinned to 127.0.0.1 via `tools/bindfix.c` loaded with
+DYLD_INSERT_LIBRARIES), orphaned servers after a force quit (reaped at
+launch, SIGKILL fallback in stop), clipboard restore losing the original on
+two quick dictations (single snapshot slot), "Ready" shown while
+Accessibility was missing (sticky blocking issue), no transcription timeout
+(30 s watchdog), transcript text in the log (removed, history.jsonl only),
+half-extracted model adopted as good (staging dir + size floor + sha pin),
+truncated sherpa archive poisoning builds (.part + sha), paste into a
+different app than the one you dictated into (target pid check), keychain
+search list clobbered by the signing doc (append). README gained uninstall,
+upgrade, and disclosure sections.
