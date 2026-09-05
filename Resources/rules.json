@@ -6,7 +6,8 @@
     "capitalizeFirst": true,
     "terminalPunctuation": true,
     "questionMark": true,
-    "hotwords": true
+    "hotwords": true,
+    "chunkedDecode": true
   },
   "_dictionary_help": "Each entry: 'to' is the correct spelling. 'from' lists wrong spellings to replace (whole words, any case). Without 'from', the word is matched case-insensitively and its casing fixed. Every 'to' is also sent to the speech model as a hotword (needs a relaunch). Add your own name and the products or people you mention often.",
   "dictionary": [

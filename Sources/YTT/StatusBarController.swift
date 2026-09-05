@@ -11,6 +11,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let lastLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
 
     var onQuit: (() -> Void)?
+    var onRestart: (() -> Void)?
 
     // A missing permission is sticky: progress and "ready" updates must not
     // paint over it, or a fresh install says Ready while nothing works.
@@ -33,6 +34,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         updates.target = self
         menu.addItem(updates)
         menu.addItem(.separator())
+        let restart = NSMenuItem(title: "Restart YTT", action: #selector(restartTapped), keyEquivalent: "r")
+        restart.target = self
+        menu.addItem(restart)
         let quit = NSMenuItem(title: "Quit YTT", action: #selector(quitTapped), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -108,6 +112,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     // voice with no warning. Bump Resources/models.json when one is worth it.
     @objc private func openModelReleases() {
         NSWorkspace.shared.open(URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models")!)
+    }
+
+    @objc private func restartTapped() {
+        onRestart?()
     }
 
     @objc private func quitTapped() {

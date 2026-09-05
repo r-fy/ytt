@@ -35,10 +35,14 @@ this README calls it the fn key.
 
 1. Press and hold the fn key. The mic turns on and the menu bar icon turns
    red. Keep holding while you talk.
-2. Let go of the key. The mic turns off and the icon turns orange while the
-   speech model on your Mac turns the audio into text. That takes about half
-   a second for a short sentence.
-3. The text gets a quick cleanup (a period at the end, a capital first
+2. While you talk, YTT listens for pauses. Each time you pause after a few
+   seconds of speech, the audio so far goes to the speech model on your Mac
+   right away. Long dictations get decoded while you are still talking.
+3. Let go of the key. The mic turns off and the icon turns orange while the
+   model finishes the last few seconds. That takes about half a second for
+   a short sentence. A long one should take about the same, since most of
+   it is already done.
+4. The text gets a quick cleanup (a period at the end, a capital first
    letter, your dictionary fixes) and is pasted where your cursor is, the
    same as if you had pressed Cmd+V. Whatever was on your clipboard before
    is put back.
@@ -71,6 +75,11 @@ Honest numbers, all measured on one machine, a MacBook Air with an M5 chip and
 | 15 s of speech | about 1.2 s |
 | 34 s of speech | about 2.5 s |
 | Mic opens after the fn press | 130 to 250 ms (first word still intact) |
+
+The 15 s and 34 s rows are from before decode-while-talking. Now the audio
+is cut at pauses and decoded during the hold, so the wait after release
+should stay near the short-sentence number at any length. Those rows await
+a fresh measurement.
 
 An Intel Mac will be slower, and an older Apple Silicon chip somewhat slower.
 Expect a few misheard words per paragraph on names and jargon; that is what
@@ -171,9 +180,13 @@ restart. Every rule has an on/off switch:
   "capitalizeFirst": true,
   "terminalPunctuation": true,
   "questionMark": true,
-  "hotwords": true
+  "hotwords": true,
+  "chunkedDecode": true
 }
 ```
+
+`chunkedDecode` is the decode-while-talking switch. Set it to false and YTT
+sends the whole recording once after you let go, as it did before.
 
 Dictionary entries give the correct spelling and, optionally, the wrong ones
 to replace. Add your own name and the products or people you say often:
@@ -227,9 +240,9 @@ Sources/YTT/
   AppDelegate.swift          wiring, permissions, login item
   GlobeKeyListener.swift     fn down/up via a global event monitor
   GlobeSystemAction.swift    holds the system fn-tap action at "Do Nothing" while running
-  AudioRecorder.swift        mic capture to 16 kHz float32
+  AudioRecorder.swift        mic capture to 16 kHz float32, cuts chunks at pauses
   SherpaProcess.swift        spawns and supervises the speech server
-  SherpaWebSocketEngine.swift  one binary message per dictation
+  SherpaWebSocketEngine.swift  one binary message per chunk
   Hotwords.swift             hotword list and BPE vocab for the server
   ModelStore.swift           manifest, download, extract, install marker
   TextInjector.swift         pasteboard + Cmd+V, restore afterwards
@@ -249,7 +262,7 @@ tools/                       fetch-sherpa.sh, check-rules.sh
   [OpenWhispr](https://github.com/openwhispr/openwhispr) (MIT), stripped down
   and ported into the app.
 - Speech: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) running
-  NVIDIA's Parakeet TDT 0.6B v3.
+  NVIDIA's Parakeet Unified 0.6B (English, int8).
 - Icon generated with gpt-image-2.
 
 ## License

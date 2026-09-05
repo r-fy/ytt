@@ -1,7 +1,8 @@
 # YTT status
 
 Native Swift menu bar app. Hold fn, talk, release, words land at the cursor.
-Speech: Parakeet 0.6B through a resident sherpa-onnx websocket server.
+Speech: Parakeet Unified 0.6B (English, int8) through a resident sherpa-onnx
+websocket server.
 
 ## Build and install
 
@@ -34,8 +35,22 @@ Log: `~/Library/Logs/YTT.log`. Quit from the menu bar icon or `pkill YTT`.
   neighbouring words, so 1.5 it is. Switch off with `"hotwords": false` in
   rules.json (needs relaunch).
 - History: one JSON line per dictation in `history.jsonl` in the data folder.
-- Next: Phase 7 (small local model for context errors) only after daily use
-  shows which errors rules cannot fix. Phase 8 (correction watcher) after that.
+- Phase 7 (2026-09-05): decode while you talk. `PauseChunker` in
+  `AudioRecorder.swift` judges 100 ms frames; a pause is 0.5 s of frames under
+  max(0.002, 3 x quietest frame of the hold). After 4 s of audio a pause closes
+  the chunk at the middle of the quiet run; 30 s with no pause forces a cut.
+  Each chunk goes to the server during the hold, one at a time (`Dictation`
+  in `AppDelegate.swift`), results join in order after release. last.wav, the
+  120 s cap, the 0.25 s tap rule, and history audio seconds all still use the
+  full recording. Log lines: `CHUNK i decode= audio=`, `REC_STOP ... chunks=
+  silenceRMS=`. Check: `YTT --chunk-test file.wav` prints cut points.
+  Constants are set for an assumed working range (speech 0.003 to 0.007 RMS,
+  noise 0.0005), not a measurement taken from this mic; watch `silenceRMS=`
+  in the log on other mics. The threshold is capped at a fraction of the
+  loudest frame heard so far, so a hold with no true silence never lets the
+  threshold climb into speech and cut mid-word.
+- Next: small local model for context errors only after daily use shows
+  which errors rules cannot fix. Correction watcher after that.
 
 ## Data folder
 

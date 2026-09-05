@@ -61,6 +61,8 @@ final class RulesEngine {
     // Correct spellings, for the engine's hotword list.
     var dictionaryTerms: [String] { file?.dictionary.map(\.to) ?? [] }
     var hotwordsEnabled: Bool { file?.rules["hotwords"] ?? true }
+    // Off means one send after release, as before Phase 7. No relaunch needed.
+    var chunkedDecodeEnabled: Bool { file?.rules["chunkedDecode"] ?? true }
 
     func apply(_ input: String) -> String {
         reloadIfChanged()
