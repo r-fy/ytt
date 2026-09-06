@@ -94,7 +94,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
         rules.reloadIfChanged()
         recorder.chunking = rules.chunkedDecodeEnabled
         if recorder.start() {
-            current = Dictation(engine: engine)
+            var protectedWords: Set<String> = []
+            for term in rules.dictionaryTerms {
+                protectedWords.insert(term.lowercased())
+                if let firstWord = term.split(separator: " ").first {
+                    protectedWords.insert(firstWord.lowercased())
+                }
+            }
+            current = Dictation(engine: engine, protectedWords: protectedWords)
             statusBar.set(.recording)
         }
     }
@@ -205,6 +212,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
     }
 }
 
+// Chunks cut mid-sentence decode separately, so the model has no idea the
+// previous chunk was left hanging: it capitalizes the next chunk's first
+// word as if a fresh sentence started. Seam.stitch patches that join back up
+// without ever touching a chunk's own words, only the space between two of
+// them.
+enum Seam {
+    static func stitch(_ pieces: [String], protected: Set<String>) -> String {
+        let alwaysProtected: Set<String> = protected.union(["i", "i'm", "i'll", "i've", "i'd"])
+        let kept = pieces
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !kept.isEmpty else { return "" }
+
+        var result = [kept[0]]
+        for i in 1..<kept.count {
+            let previous = kept[i - 1]
+            let piece = kept[i]
+            if let last = previous.last, ".?!:".contains(last) {
+                result.append(piece)
+                continue
+            }
+            result.append(Seam.lowercasedFirstWordIfSafe(piece, protected: alwaysProtected))
+        }
+        return result.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func lowercasedFirstWordIfSafe(_ piece: String, protected: Set<String>) -> String {
+        guard let firstWordRange = piece.range(of: "\\S+", options: .regularExpression) else { return piece }
+        let firstWord = piece[firstWordRange]
+        var core = Substring(firstWord)
+        while let f = core.first, !f.isLetter { core = core.dropFirst() }
+        while let l = core.last, !l.isLetter { core = core.dropLast() }
+        let normalizedCore = core.replacingOccurrences(of: "\u{2019}", with: "'")
+
+        if protected.contains(normalizedCore.lowercased()) { return piece }
+        let letterCount = normalizedCore.filter { $0.isLetter }.count
+        if letterCount >= 2, normalizedCore == normalizedCore.uppercased() { return piece }
+        let firstTwo = Array(normalizedCore.prefix(2))
+        if firstTwo.count == 2, firstTwo[0].isUppercase, firstTwo[1].isUppercase { return piece }
+
+        guard let first = piece.first, first.isUppercase else { return piece }
+        return String(first).lowercased() + piece.dropFirst()
+    }
+}
+
 // One hold of the key. Chunks cut during the hold go to the server right
 // away, so after release only the tail is left to decode. Sends run one at
 // a time: the server shares four threads across connections, so parallel
@@ -217,8 +269,12 @@ private final class Dictation {
     private var sending = false
     private var failure: Error?
     private var onDone: ((Result<String, Error>) -> Void)?
+    private let protectedWords: Set<String>
 
-    init(engine: Transcriber) { self.engine = engine }
+    init(engine: Transcriber, protectedWords: Set<String> = []) {
+        self.engine = engine
+        self.protectedWords = protectedWords
+    }
 
     func add(_ samples: [Float]) {
         texts.append(nil)
@@ -275,8 +331,7 @@ private final class Dictation {
     private func settle() {
         guard let onDone, texts.allSatisfy({ $0 != nil }) else { return }
         self.onDone = nil
-        let joined = texts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let joined = Seam.stitch(texts.compactMap { $0 }, protected: protectedWords)
         if joined.isEmpty, let failure { onDone(.failure(failure)) } else { onDone(.success(joined)) }
     }
 }

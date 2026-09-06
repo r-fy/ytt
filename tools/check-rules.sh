@@ -28,5 +28,22 @@ check "where is the file"                    "Where is the file?"
 check "Already done."                        "Already done."
 check "the jason file is broken"             "The JSON file is broken."
 check "jasonville is a town"                 "Jasonville is a town."
+stitch() {
+  local pieces="$1" expected="$2" protected="${3:-}"
+  local got
+  got="$("$BIN" --stitch-test "$pieces" "$protected" 2>/dev/null)"
+  if [ "$got" == "$expected" ]; then
+    echo "ok    $pieces  ->  $got"
+  else
+    echo "FAIL  $pieces  ->  $got   (expected: $expected)"
+    fail=1
+  fi
+}
+stitch "looking at the output|It seems that"        "looking at the output it seems that"
+stitch "done.|It seems"                             "done. It seems"
+stitch "review the|OASIS form"                      "review the OASIS form"
+stitch "and then|I think"                           "and then I think"
+stitch "talk to|Raffi today"                        "talk to Raffi today"          "raffi"
+stitch "I talked to Bob,|And then left"              "I talked to Bob, and then left"
 rm -rf "$SCRATCH"
 exit $fail

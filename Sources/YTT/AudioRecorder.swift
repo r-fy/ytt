@@ -187,8 +187,8 @@ struct PauseChunker {
     static let noiseFactor: Float = 3
     // A pause must be far quieter than the loudest thing heard. Without this, a hold with no true silence sets the floor from speech itself and the threshold climbs into the speech range, cutting mid-word.
     static let peakFraction: Float = 6
-    // Half a second of quiet counts as a pause. Shorter gaps sit inside sentences.
-    static let pauseSeconds = 0.5
+    // 0.9 seconds of quiet counts as a pause. Shorter gaps sit inside sentences.
+    static let pauseSeconds = 0.9
     // A chunk needs at least this much audio before a pause may close it.
     static let minChunkSeconds = 4.0
     // Cut here even without a pause so no single decode runs long.

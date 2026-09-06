@@ -50,6 +50,22 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--chunk-test" 
     exit(0)
 }
 
+// `YTT --stitch-test "a|b|c" [comma,separated,protected]` runs Seam.stitch
+// over pipe-separated pieces and prints the result. The runnable check for
+// seam stitching: tools/check-rules.sh uses it. Does not construct a
+// RulesEngine, so it never touches the real data folder.
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--stitch-test" {
+    let pieces = CommandLine.arguments[2].components(separatedBy: "|")
+    let protected: Set<String>
+    if CommandLine.arguments.count >= 4, !CommandLine.arguments[3].isEmpty {
+        protected = Set(CommandLine.arguments[3].components(separatedBy: ",").map { $0.lowercased() })
+    } else {
+        protected = []
+    }
+    print(Seam.stitch(pieces, protected: protected))
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

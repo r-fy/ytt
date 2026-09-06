@@ -36,7 +36,7 @@ Log: `~/Library/Logs/YTT.log`. Quit from the menu bar icon or `pkill YTT`.
   rules.json (needs relaunch).
 - History: one JSON line per dictation in `history.jsonl` in the data folder.
 - Phase 7 (2026-09-05): decode while you talk. `PauseChunker` in
-  `AudioRecorder.swift` judges 100 ms frames; a pause is 0.5 s of frames under
+  `AudioRecorder.swift` judges 100 ms frames; a pause is 0.9 s of frames under
   max(0.002, 3 x quietest frame of the hold). After 4 s of audio a pause closes
   the chunk at the middle of the quiet run; 30 s with no pause forces a cut.
   Each chunk goes to the server during the hold, one at a time (`Dictation`
@@ -49,6 +49,13 @@ Log: `~/Library/Logs/YTT.log`. Quit from the menu bar icon or `pkill YTT`.
   in the log on other mics. The threshold is capped at a fraction of the
   loudest frame heard so far, so a hold with no true silence never lets the
   threshold climb into speech and cut mid-word.
+- Phase 7 (2026-09-05): the pause that ends a chunk grew from half a second to
+  0.9 s, so cuts land more often on a real sentence break. When a cut still
+  lands mid-sentence, `Seam.stitch` in `AppDelegate.swift` fixes the join: it
+  lowercases a wrongly capitalized word at the start of the next chunk,
+  unless the word is "I" or a contraction of it, an acronym in capitals, or a term
+  from the cleanup dictionary; a name not in the dictionary still gets lowercased. Check:
+  `YTT --stitch-test "a|b|c"`.
 - Next: small local model for context errors only after daily use shows
   which errors rules cannot fix. Correction watcher after that.
 
