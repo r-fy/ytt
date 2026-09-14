@@ -63,8 +63,12 @@ final class RulesEngine {
     var hotwordsEnabled: Bool { file?.rules["hotwords"] ?? true }
     // Off means one send after release, as before Phase 7. No relaunch needed.
     var chunkedDecodeEnabled: Bool { file?.rules["chunkedDecode"] ?? true }
+    // Off means one paragraph, as before Phase 8.
+    var paragraphsEnabled: Bool { file?.rules["paragraphs"] ?? true }
 
-    func apply(_ input: String) -> String {
+    // Word-level cleanup: dictionary fixes and currency spacing. Safe to run
+    // per chunk, before the sentence is complete.
+    func applyWords(_ input: String) -> String {
         reloadIfChanged()
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return text }
@@ -77,6 +81,16 @@ final class RulesEngine {
         if on("spaceBeforeCurrency") {
             text = text.replacingOccurrences(of: "(?<=[\\p{L}\\p{N}])(?=[$€£])", with: " ", options: .regularExpression)
         }
+        return text
+    }
+
+    // Sentence-level cleanup: capitalization and terminal punctuation. Only
+    // meaningful once a piece of text is a whole sentence.
+    func applySentence(_ input: String) -> String {
+        reloadIfChanged()
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return text }
+
         if on("capitalizeFirst"), let first = text.first, first.isLetter, first.isLowercase {
             text = first.uppercased() + text.dropFirst()
         }
@@ -85,6 +99,9 @@ final class RulesEngine {
         }
         return text
     }
+
+    // CleanupPipeline and --clean still use the combined pass.
+    func apply(_ input: String) -> String { applySentence(applyWords(input)) }
 
     private static let questionStarters: Set<String> = [
         "who", "what", "when", "where", "why", "how", "which", "whose",

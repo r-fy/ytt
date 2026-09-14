@@ -47,6 +47,8 @@ this README calls it the fn key.
    same as if you had pressed Cmd+V. Whatever was on your clipboard before
    is put back.
 
+Long dictations come back as several paragraphs, split where you paused longest.
+
 Under the hood: the speech model (NVIDIA Parakeet, run by sherpa-onnx) is
 loaded once when YTT starts and stays in memory, so there is no delay when
 you press the key. It is downloaded on first run into
@@ -167,6 +169,9 @@ System Settings > General > Login Items if you would rather launch it by hand.
 
 **Apple Silicon or Intel** both work. `build.sh` makes a universal binary.
 
+**Some chat apps send the message on Enter.** A paragraph break YTT pastes
+can look different there than in a text editor.
+
 ## Cleanup rules
 
 Rules live in a plain JSON file you can edit by hand. Pick "Edit cleanup
@@ -181,12 +186,16 @@ restart. Every rule has an on/off switch:
   "terminalPunctuation": true,
   "questionMark": true,
   "hotwords": true,
-  "chunkedDecode": true
+  "chunkedDecode": true,
+  "paragraphs": true
 }
 ```
 
 `chunkedDecode` is the decode-while-talking switch. Set it to false and YTT
 sends the whole recording once after you let go, as it did before.
+
+`paragraphs` breaks long dictations into paragraphs at your longest pauses.
+Set it to false and you get one block of text instead.
 
 Dictionary entries give the correct spelling and, optionally, the wrong ones
 to replace. Add your own name and the products or people you say often:

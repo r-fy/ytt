@@ -66,6 +66,26 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--stitch-test"
     exit(0)
 }
 
+// `YTT --join-test "text|pause||text|pause" [off]` runs Seam.join over
+// pieces separated by `||`, each `text|pause`. Optional third argument
+// `off` turns paragraphs off. The runnable check for paragraph breaks:
+// tools/check-rules.sh uses it. Builds a RulesEngine (check-rules.sh points
+// that at a scratch dir via YTT_DATA_DIR_OVERRIDE) to run applyWords on
+// each piece before joining, same as a real chunk would get.
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--join-test" {
+    let rules = RulesEngine()
+    let paragraphsOn = !(CommandLine.arguments.count >= 4 && CommandLine.arguments[3] == "off")
+    let chunks: [Seam.Chunk] = CommandLine.arguments[2].components(separatedBy: "||").map { piece in
+        let parts = piece.components(separatedBy: "|")
+        let text = rules.applyWords(parts[0])
+        let pause = parts.count >= 2 ? Double(parts[1]) ?? 0 : 0
+        return Seam.Chunk(text: text, pauseAfter: pause)
+    }
+    let joined = Seam.join(chunks: chunks, paragraphsOn: paragraphsOn, protected: [], sentence: rules.applySentence)
+    print(joined.replacingOccurrences(of: "\n\n", with: " <P> "))
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

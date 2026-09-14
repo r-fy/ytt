@@ -45,5 +45,25 @@ stitch "review the|OASIS form"                      "review the OASIS form"
 stitch "and then|I think"                           "and then I think"
 stitch "talk to|Raffi today"                        "talk to Raffi today"          "raffi"
 stitch "I talked to Bob,|And then left"              "I talked to Bob, and then left"
+join() {
+  local pieces="$1" expected="$2" off="${3:-}"
+  local got
+  got="$("$BIN" --join-test "$pieces" "$off" 2>/dev/null)"
+  if [ "$got" == "$expected" ]; then
+    echo "ok    $pieces  ->  $got"
+  else
+    echo "FAIL  $pieces  ->  $got   (expected: $expected)"
+    fail=1
+  fi
+}
+join "Okay, I trust you with the Qwen 3 1.7B situation.|1.8||I just want to know what you think. Talk to me about that.|1.9||Also, let's also discuss the paragraph bit that should be split.|1.6||I'm open to hear your thoughts on long messages.|0" \
+     "Okay, I trust you with the Qwen 3 1.7B situation. I just want to know what you think. Talk to me about that. <P> Also, let's also discuss the paragraph bit that should be split. I'm open to hear your thoughts on long messages."
+join "one.|1.2||two here. three here.|0"             "One. two here. three here."
+join "one sentence here.|2.0||two. three.|0"         "One sentence here. two. three."
+join "a b. c d.|2.0||e f. g h.|2.0||i j. k l.|0"     "A b. c d. <P> E f. g h. <P> I j. k l."
+join "ends without punctuation|2.0||Next one. and two.|0" "Ends without punctuation next one. and two."
+join "a b. c d.|2.0||e f. g h.|2.0||last one.|0"     "A b. c d. <P> E f. g h. last one."
+join "a b. c d.|2.0||e f. g h.|2.0||i j. k l.|0"     "A b. c d. e f. g h. i j. k l."      "off"
+join "it costs 4.50 today. J. Smith agreed.|2.0||fine. done.|0" "It costs 4.50 today. J. Smith agreed. <P> Fine. done."
 rm -rf "$SCRATCH"
 exit $fail

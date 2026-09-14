@@ -101,7 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
                     protectedWords.insert(firstWord.lowercased())
                 }
             }
-            current = Dictation(engine: engine, protectedWords: protectedWords)
+            current = Dictation(
+                engine: engine, protectedWords: protectedWords,
+                paragraphsOn: rules.paragraphsEnabled,
+                words: rules.applyWords, sentence: rules.applySentence)
             statusBar.set(.recording)
         }
     }
@@ -141,6 +144,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
                   AudioRecorder.hasSpeech(rec.tail, above: rec.silenceRMS) {
             dictation.add(rec.tail)
         }
+        // Every pause is known by release, so no callback can arrive late.
+        dictation.setPauses(rec.pauses)
         dictation.finish { [weak self] result in
             guard let self else { return }
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
@@ -148,6 +153,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
             case .success(let text):
                 // The words themselves go to history.jsonl, not the log.
                 Log.info("TEXT decode=\(ms)ms audio=\(String(format: "%.2f", audioSeconds))s chars=\(text.count)")
+                // Both rule stages are idempotent, so this second full pass
+                // over already-cleaned words and sentences changes nothing.
                 let cleaned = self.cleanup.run(text)
                 if !cleaned.isEmpty {
                     TextInjector.insert(cleaned, intendedTarget: target)
@@ -227,15 +234,105 @@ enum Seam {
 
         var result = [kept[0]]
         for i in 1..<kept.count {
-            let previous = kept[i - 1]
-            let piece = kept[i]
-            if let last = previous.last, ".?!:".contains(last) {
-                result.append(piece)
-                continue
-            }
-            result.append(Seam.lowercasedFirstWordIfSafe(piece, protected: alwaysProtected))
+            result.append(Seam.appended(kept[i], after: kept[i - 1], protected: alwaysProtected))
         }
         return result.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    struct Chunk { let text: String; let pauseAfter: Double }
+    // A pause this long between chunks can start a new paragraph. Shorter gaps
+    // happen inside a paragraph.
+    static let paragraphPause = 1.5
+
+    static func join(chunks: [Chunk], threshold: Double = paragraphPause, paragraphsOn: Bool, protected: Set<String>, sentence: (String) -> String) -> String {
+        let alwaysProtected: Set<String> = protected.union(["i", "i'm", "i'll", "i've", "i'd"])
+
+        // 1. Trim, drop empty chunks, folding their pause into the seam before them.
+        var kept: [Chunk] = []
+        var carry: Double = 0
+        for chunk in chunks {
+            let text = chunk.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty {
+                carry = max(carry, chunk.pauseAfter)
+                continue
+            }
+            if !kept.isEmpty {
+                let last = kept[kept.count - 1]
+                kept[kept.count - 1] = Chunk(text: last.text, pauseAfter: max(last.pauseAfter, carry))
+            }
+            // A carry before the first kept chunk, or trailing after the last, is discarded.
+            carry = 0
+            kept.append(Chunk(text: text, pauseAfter: chunk.pauseAfter))
+        }
+
+        guard !kept.isEmpty else { return "" }
+        if kept.count == 1 { return sentence(kept[0].text) }
+
+        // 3. Walk seams left to right, breaking into a new paragraph when the
+        // pause before this seam was long and what came before it looks done.
+        var paragraphs: [String] = []
+        var current = kept[0].text
+        for i in 1..<kept.count {
+            let previous = kept[i - 1]
+            let isParagraphBreak = paragraphsOn
+                && previous.pauseAfter >= threshold
+                && (previous.text.last.map { ".?!".contains($0) } ?? false)
+                && sentenceCount(current) >= 2
+            if isParagraphBreak {
+                paragraphs.append(current)
+                current = kept[i].text
+            } else {
+                current += " " + Seam.appended(kept[i].text, after: previous.text, protected: alwaysProtected)
+            }
+        }
+        paragraphs.append(current)
+
+        // 4. One merge pass: a paragraph with under two sentences is too short
+        // to stand alone, so it folds into the next one (or the previous, at the end).
+        var out: [String] = []
+        var mergeCarry: String?
+        for p in paragraphs {
+            let text = mergeCarry.map { $0 + " " + p } ?? p
+            mergeCarry = nil
+            if sentenceCount(text) < 2 { mergeCarry = text } else { out.append(text) }
+        }
+        if let mergeCarry {
+            if out.isEmpty { out = [mergeCarry] } else { out[out.count - 1] += " " + mergeCarry }
+        }
+
+        return out.map(sentence).joined(separator: "\n\n")
+    }
+
+    // The "append one piece to what came before" rule, shared by stitch and
+    // join: a piece after terminal punctuation is left alone; otherwise its
+    // first word is lowercased unless that would be unsafe (a protected word,
+    // an acronym, or an initialism).
+    private static func appended(_ piece: String, after previous: String, protected: Set<String>) -> String {
+        if let last = previous.last, ".?!:".contains(last) { return piece }
+        return Seam.lowercasedFirstWordIfSafe(piece, protected: protected)
+    }
+
+    // Counts sentence-ending punctuation: `.`, `?`, `!` that end a word (are
+    // followed by whitespace or the end of the string) and are preceded by a
+    // letter or digit. A `.` preceded by a single capital letter (an initial,
+    // e.g. "J.") does not count. Decimals like 4.50 need no special case
+    // because the digit after the period is not whitespace. Deliberately
+    // conservative: this only needs to tell "one sentence" from "two or more".
+    private static func sentenceCount(_ text: String) -> Int {
+        let chars = Array(text)
+        var count = 0
+        for i in chars.indices {
+            let c = chars[i]
+            guard c == "." || c == "?" || c == "!" else { continue }
+            let endsWord = (i + 1 == chars.count) || chars[i + 1].isWhitespace
+            guard endsWord, i > 0, chars[i - 1].isLetter || chars[i - 1].isNumber else { continue }
+            if c == ".", chars[i - 1].isUppercase {
+                let precededByLetterOrDigit = i > 1 && (chars[i - 2].isLetter || chars[i - 2].isNumber)
+                if !precededByLetterOrDigit { continue }
+            }
+            count += 1
+        }
+        return count
     }
 
     private static func lowercasedFirstWordIfSafe(_ piece: String, protected: Set<String>) -> String {
@@ -270,11 +367,20 @@ private final class Dictation {
     private var failure: Error?
     private var onDone: ((Result<String, Error>) -> Void)?
     private let protectedWords: Set<String>
+    private let paragraphsOn: Bool
+    private let words: (String) -> String
+    private let sentence: (String) -> String
+    private var pauses: [Int: Double] = [:]
 
-    init(engine: Transcriber, protectedWords: Set<String> = []) {
+    init(engine: Transcriber, protectedWords: Set<String> = [], paragraphsOn: Bool, words: @escaping (String) -> String, sentence: @escaping (String) -> String) {
         self.engine = engine
         self.protectedWords = protectedWords
+        self.paragraphsOn = paragraphsOn
+        self.words = words
+        self.sentence = sentence
     }
+
+    func setPauses(_ p: [Int: Double]) { pauses = p }
 
     func add(_ samples: [Float]) {
         texts.append(nil)
@@ -306,7 +412,7 @@ private final class Dictation {
             switch result {
             case .success(let text):
                 Log.info("CHUNK \(job.index) decode=\(ms)ms audio=\(seconds)s chars=\(text.count)")
-                self.texts[job.index] = text
+                self.texts[job.index] = self.words(text)
             case .failure(let e):
                 Log.warn("CHUNK \(job.index) failed after \(ms)ms: \(e.localizedDescription)")
                 self.failure = e
@@ -331,7 +437,8 @@ private final class Dictation {
     private func settle() {
         guard let onDone, texts.allSatisfy({ $0 != nil }) else { return }
         self.onDone = nil
-        let joined = Seam.stitch(texts.compactMap { $0 }, protected: protectedWords)
+        let chunks = texts.enumerated().compactMap { i, t in t.map { Seam.Chunk(text: $0, pauseAfter: self.pauses[i] ?? 0) } }
+        let joined = Seam.join(chunks: chunks, paragraphsOn: paragraphsOn, protected: protectedWords, sentence: sentence)
         if joined.isEmpty, let failure { onDone(.failure(failure)) } else { onDone(.success(joined)) }
     }
 }

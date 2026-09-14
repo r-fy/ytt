@@ -56,6 +56,13 @@ Log: `~/Library/Logs/YTT.log`. Quit from the menu bar icon or `pkill YTT`.
   unless the word is "I" or a contraction of it, an acronym in capitals, or a term
   from the cleanup dictionary; a name not in the dictionary still gets lowercased. Check:
   `YTT --stitch-test "a|b|c"`.
+- Phase 8 (2026-09-14): paragraph breaks. A pause of 1.5 s or more ends a
+  paragraph, but only if the chunk before it ends in `.`, `?`, or `!` and the
+  paragraph so far has at least two sentences. A one-sentence paragraph gets
+  merged back into its neighbour, so you never get a lonely single line.
+  Switch off with `"paragraphs": false` in rules.json. A local LLM cleanup
+  stage was also benchmarked across 12 models on 2026-09-14 and shelved, see
+  `private/LLM_FORMAT_BENCH_2026-09-14.md`.
 - Next: small local model for context errors only after daily use shows
   which errors rules cannot fix. Correction watcher after that.
 

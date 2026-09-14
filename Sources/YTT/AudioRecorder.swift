@@ -17,6 +17,8 @@ final class AudioRecorder {
     var onCapReached: (() -> Void)?
     // Called on the main queue with each finished chunk while the key is
     // still held, so the server decodes it before the hold ends.
+    // Chunk index N is simply the Nth call to onChunk; Dictation relies on
+    // that alignment to match pauses (by index) back to their chunk text.
     var onChunk: (([Float]) -> Void)?
     // Set per hold. Off keeps the whole recording for one send after release.
     var chunking = true
@@ -25,6 +27,7 @@ final class AudioRecorder {
         let all: [Float]    // the whole hold, for last.wav and the tap rule
         let tail: [Float]   // what onChunk has not handed out yet
         let silenceRMS: Float   // the quiet threshold this hold settled on
+        let pauses: [Int: Double]   // chunk index -> seconds of the silent run that contained its cut
     }
 
     var isRecording: Bool { recording }
@@ -146,8 +149,9 @@ final class AudioRecorder {
             Log.info("REC_DISCARD \(String(format: "%.2f", seconds))s")
             return nil
         }
+        chunker.finish(at: captured.count)
         Log.info("REC_STOP \(String(format: "%.2f", seconds))s chunks=\(chunker.chunks) silenceRMS=\(String(format: "%.4f", chunker.threshold))")
-        return Recording(all: captured, tail: Array(captured[emitted...]), silenceRMS: chunker.threshold)
+        return Recording(all: captured, tail: Array(captured[emitted...]), silenceRMS: chunker.threshold, pauses: chunker.pauseAfter)
     }
 
     static func rms(_ samples: ArraySlice<Float>) -> Float {
@@ -202,6 +206,14 @@ struct PauseChunker {
     private var frame: [Float] = []   // samples gathered toward the next 100 ms judgement
     private var frameStart = 0
 
+    // Chunk index -> seconds of the silent run that contained its cut. A
+    // forced 30 s cut records 0; the tail records nothing (treated as 0).
+    // The measured span is always the whole silent run containing the cut,
+    // both mid-hold and at release, so the number means the same thing
+    // everywhere.
+    private(set) var pauseAfter: [Int: Double] = [:]
+    private var openPause: (index: Int, since: Int)?   // a run still counting after a cut
+
     var threshold: Float {
         let adaptive = floor == .greatestFiniteMagnitude
             ? PauseChunker.silenceRMS
@@ -224,6 +236,11 @@ struct PauseChunker {
         if rms < threshold {
             if silenceStart == nil { silenceStart = frameStart }
         } else {
+            // Speech resumed: close any run still counting after an earlier cut.
+            if let open = openPause {
+                pauseAfter[open.index] = Double(frameStart - open.since) / AudioRecorder.sampleRate
+                openPause = nil
+            }
             silenceStart = nil
         }
         let rate = AudioRecorder.sampleRate
@@ -236,12 +253,26 @@ struct PauseChunker {
             let cut = max((s + end) / 2, chunkStart + minChunk)
             // The quiet run goes on past the cut; keep counting it from there.
             silenceStart = cut
+            let n = chunks   // index this cut will close, before close() increments it
+            if let open = openPause { pauseAfter[open.index] = Double(cut - open.since) / rate }
+            openPause = (index: n, since: s)
             return close(at: cut)
         }
         if Double(end - chunkStart) / rate >= PauseChunker.maxChunkSeconds {
+            if let open = openPause { pauseAfter[open.index] = Double(end - open.since) / rate }
+            pauseAfter[chunks] = 0
+            openPause = nil
             return close(at: end)
         }
         return nil
+    }
+
+    // Release: a silent run still counting is closed at the end of the recording.
+    mutating func finish(at end: Int) {
+        if let open = openPause {
+            pauseAfter[open.index] = Double(end - open.since) / AudioRecorder.sampleRate
+            openPause = nil
+        }
     }
 
     private mutating func close(at cut: Int) -> Int {

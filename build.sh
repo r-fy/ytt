@@ -5,8 +5,12 @@ cd "$(dirname "$0")"
 # No Xcode.app installed (only Command Line Tools), so `swift build --arch`
 # multi-target is unavailable. Build each arch with an explicit triple, then
 # lipo-merge. Same shape as AUX/build.sh.
-swift build -c release --triple arm64-apple-macosx13.0
-swift build -c release --triple x86_64-apple-macosx13.0
+# --build-system native: newer Swift defaults to a build system that writes
+# binaries under .build/out/... instead. The lipo step below still reads the
+# old .build/<triple>/release path, so we pin the old build system here to
+# keep that path fresh.
+swift build -c release --triple arm64-apple-macosx13.0 --build-system native
+swift build -c release --triple x86_64-apple-macosx13.0 --build-system native
 
 [ -d vendor/sherpa/bin ] || ./tools/fetch-sherpa.sh
 
