@@ -65,5 +65,30 @@ join "ends without punctuation|2.0||Next one. and two.|0" "Ends without punctuat
 join "a b. c d.|2.0||e f. g h.|2.0||last one.|0"     "A b. c d. <P> E f. g h. last one."
 join "a b. c d.|2.0||e f. g h.|2.0||i j. k l.|0"     "A b. c d. e f. g h. i j. k l."      "off"
 join "it costs 4.50 today. J. Smith agreed.|2.0||fine. done.|0" "It costs 4.50 today. J. Smith agreed. <P> Fine. done."
+# An incomplete flag (--join-test with no argument) used to fall through and
+# launch a real menu-bar app instance, which would hang this script. Run it
+# in the background and poll instead of calling it in the foreground, so a
+# regression gets killed instead of left running.
+"$BIN" --join-test >/dev/null 2>&1 &
+guard_pid=$!
+guard_status=""
+for _ in $(seq 1 20); do
+  if ! kill -0 "$guard_pid" 2>/dev/null; then
+    wait "$guard_pid"
+    guard_status=$?
+    break
+  fi
+  sleep 0.1
+done
+if [ -z "$guard_status" ]; then
+  kill -9 "$guard_pid" 2>/dev/null
+  echo "FAIL  --join-test with no argument  ->  still running after 2s, guard let the app launch"
+  fail=1
+elif [ "$guard_status" -eq 2 ]; then
+  echo "ok    --join-test with no argument  ->  exit 2, no app launch"
+else
+  echo "FAIL  --join-test with no argument  ->  exit $guard_status"
+  fail=1
+fi
 rm -rf "$SCRATCH"
 exit $fail
