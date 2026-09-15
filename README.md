@@ -274,7 +274,7 @@ tools/                       fetch-sherpa.sh, check-rules.sh
   [OpenWhispr](https://github.com/openwhispr/openwhispr) (MIT), stripped down
   and ported into the app.
 - Speech: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) running
-  NVIDIA's Parakeet Unified 0.6B (English, int8).
+  NVIDIA's Parakeet TDT 0.6B v3 (multilingual, int8).
 - Icon generated with gpt-image-2.
 
 ## License

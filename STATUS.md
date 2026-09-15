@@ -1,7 +1,7 @@
 # YTT status
 
 Native Swift menu bar app. Hold fn, talk, release, words land at the cursor.
-Speech: Parakeet Unified 0.6B (English, int8) through a resident sherpa-onnx
+Speech: Parakeet TDT 0.6B v3 (multilingual, int8) through a resident sherpa-onnx
 websocket server.
 
 ## Build and install
@@ -63,6 +63,11 @@ Log: `~/Library/Logs/YTT.log`. Quit from the menu bar icon or `pkill YTT`.
   Switch off with `"paragraphs": false` in rules.json. A local LLM cleanup
   stage was also benchmarked across 12 models on 2026-09-14 and shelved, see
   `private/LLM_FORMAT_BENCH_2026-09-14.md`.
+- Model switch (2026-09-14): switched the default model to Parakeet TDT 0.6B v3
+  on Raffi's request; A/B against Unified on `last.wav` gave an identical
+  transcript at 697 ms vs 757 ms median decode, so v3 replaced Unified as
+  default while the Unified entry stays in `Resources/models.json` for a
+  one-word revert.
 - Next: small local model for context errors only after daily use shows
   which errors rules cannot fix. Correction watcher after that.
 
