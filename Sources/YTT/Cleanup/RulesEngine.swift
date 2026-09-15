@@ -103,14 +103,44 @@ final class RulesEngine {
     // CleanupPipeline and --clean still use the combined pass.
     func apply(_ input: String) -> String { applySentence(applyWords(input)) }
 
-    private static let questionStarters: Set<String> = [
-        "who", "what", "when", "where", "why", "how", "which", "whose",
-        "is", "are", "am", "was", "were", "do", "does", "did", "can", "could",
-        "should", "would", "will", "shall", "have", "has", "had", "may", "might",
+    // Auxiliary verbs (is, are, can, should, ...) used to be in this set, but
+    // they fire on plain statements too ("Is what I said") and on paragraphs
+    // whose first sentence was a question but whose last sentence was not
+    // ("Because I don't know how relevant these are" got a "?" because the
+    // paragraph opened with "Is this..."). Only the true question words are
+    // reliable enough to add a "?" on their own.
+    private static let questionWords: Set<String> = [
+        "what", "who", "whom", "whose", "where", "when", "why", "how", "which",
     ]
 
     static func looksLikeQuestion(_ text: String) -> Bool {
-        guard let firstWord = text.split(whereSeparator: { !$0.isLetter }).first else { return false }
-        return questionStarters.contains(firstWord.lowercased())
+        let last = lastSentence(text)
+        guard let firstWord = last.split(whereSeparator: { !$0.isLetter }).first else { return false }
+        return questionWords.contains(firstWord.lowercased())
+    }
+
+    // Splits off the final sentence so the question-mark decision only looks
+    // at what the text is actually ending on, not an earlier sentence in the
+    // same paragraph. Same conservative split Seam.sentenceCount uses: a
+    // `.`, `?`, or `!` counts only when it ends a word (followed by
+    // whitespace or end of string) and is preceded by a letter or digit; a
+    // single capital letter before a `.` (an initial, e.g. "J.") does not
+    // count as a split point.
+    private static func lastSentence(_ text: String) -> String {
+        let chars = Array(text)
+        var splitAt: Int?
+        for i in chars.indices {
+            let c = chars[i]
+            guard c == "." || c == "?" || c == "!" else { continue }
+            let endsWord = (i + 1 == chars.count) || chars[i + 1].isWhitespace
+            guard endsWord, i > 0, chars[i - 1].isLetter || chars[i - 1].isNumber else { continue }
+            if c == ".", chars[i - 1].isUppercase {
+                let precededByLetterOrDigit = i > 1 && (chars[i - 2].isLetter || chars[i - 2].isNumber)
+                if !precededByLetterOrDigit { continue }
+            }
+            splitAt = i + 1
+        }
+        guard let splitAt, splitAt < chars.count else { return text }
+        return String(chars[splitAt...]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

@@ -28,6 +28,18 @@ check "where is the file"                    "Where is the file?"
 check "Already done."                        "Already done."
 check "the jason file is broken"             "The JSON file is broken."
 check "jasonville is a town"                 "Jasonville is a town."
+check "tell me which one is it that we need to use" "Tell me which one is it that we need to use."
+check "because I don't know how relevant these are" "Because I don't know how relevant these are."
+check "what's taking so long"                "What's taking so long?"
+check "which directories are asking for the W9" "Which directories are asking for the W9?"
+# Auxiliary starters (is/are/can/...) no longer get a "?" on their own, since
+# they misfired on statements too. This is an accepted loss, not a bug.
+check "is this the right one"                "Is this the right one."
+# --clean only capitalizes the very first letter of the whole input, not each
+# internal sentence (same pre-existing behavior as the "two here. three
+# here." join test above), so the mid-string "what"/"do" stay lowercase here.
+check "can you check this. what do you think" "Can you check this. what do you think?"
+check "what do you think. do it now"         "What do you think. do it now."
 stitch() {
   local pieces="$1" expected="$2" protected="${3:-}"
   local got

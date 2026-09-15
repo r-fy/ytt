@@ -197,6 +197,9 @@ sends the whole recording once after you let go, as it did before.
 `paragraphs` breaks long dictations into paragraphs at your longest pauses.
 Set it to false and you get one block of text instead.
 
+`questionMark` adds a "?" instead of a "." only when the last sentence
+starts with what, who, whom, whose, where, when, why, how, or which.
+
 Dictionary entries give the correct spelling and, optionally, the wrong ones
 to replace. Add your own name and the products or people you say often:
 
