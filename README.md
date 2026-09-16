@@ -9,13 +9,9 @@
   A tiny macOS menu bar app for push-to-talk dictation, fully offline.
 </p>
 
-<p align="center">
-  <a href="docs/demo.mp4">
-    <img src="docs/demo-poster.jpg" width="640" alt="YTT demo video, click to play">
-  </a>
-  <br>
-  <sub>Click to play (19s)</sub>
-</p>
+## Demo
+
+https://github.com/user-attachments/assets/833dc351-aea3-4705-92bd-b12ebb2e5a5e
 
 ---
 
