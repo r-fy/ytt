@@ -7,3 +7,4 @@ spike/audio-spike
 spike/transcribe-spike
 spike/*.log
 log.txt
+brag-output/

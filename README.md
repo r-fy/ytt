@@ -9,6 +9,14 @@
   A tiny macOS menu bar app for push-to-talk dictation, fully offline.
 </p>
 
+<p align="center">
+  <a href="docs/demo.mp4">
+    <img src="docs/demo-poster.jpg" width="640" alt="YTT demo video, click to play">
+  </a>
+  <br>
+  <sub>Click to play (19s)</sub>
+</p>
+
 ---
 
 YTT stands for Yap to Text. "Speech to text" sounded too formal for what
