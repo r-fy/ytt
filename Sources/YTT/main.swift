@@ -2,10 +2,20 @@ import AppKit
 import AVFoundation
 
 // `YTT --clean "some text"` prints the cleaned text and exits. The runnable
-// check for the rules engine: tools/check-rules.sh uses it.
+// check for the rules engine: tools/check-rules.sh uses it. Also the
+// standalone check for the optional Ollama stage (OllamaFormatter.swift):
+// with `llmCleanup` on, this exercises the same async pipeline AppDelegate
+// uses. No NSApplication run loop is started in this branch, so the wait
+// below pumps RunLoop.main directly -- DispatchQueue.main only drains once
+// something is actually running the main run loop.
 if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--clean" {
     let pipeline = CleanupPipeline(rules: RulesEngine())
-    print(pipeline.run(CommandLine.arguments[2...].joined(separator: " ")))
+    var result: String?
+    pipeline.run(CommandLine.arguments[2...].joined(separator: " ")) { result = $0 }
+    while result == nil {
+        RunLoop.main.run(mode: .default, before: .distantFuture)
+    }
+    print(result!)
     exit(0)
 }
 

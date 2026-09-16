@@ -63,6 +63,15 @@ Log: `~/Library/Logs/YTT.log`. Quit from the menu bar icon or `pkill YTT`.
   Switch off with `"paragraphs": false` in rules.json. A local LLM cleanup
   stage was also benchmarked across 12 models on 2026-09-14 and shelved, see
   `private/LLM_FORMAT_BENCH_2026-09-14.md`.
+- LLM cleanup stage (2026-09-16): `OllamaFormatter.swift`, an optional third
+  stage that sends rules-cleaned text to a local Ollama process (s1-mini,
+  127.0.0.1 only, no network egress) for punctuation/paragraph reformatting.
+  Off by default: `defaults write local.ytt.menubar llmCleanup -bool true`,
+  then relaunch. Runs with a hard deadline (~9.5 s) so a hung or stopped
+  Ollama never blocks the paste; falls back to rules-only text on timeout,
+  error, or if the output drops/alters a number or proper-noun-ish token
+  (`OllamaFormatter.passesSafetyCheck`). A generation counter discards a
+  stale reply from a dictation the user has since moved past.
 - Model switch (2026-09-14): switched the default model to Parakeet TDT 0.6B v3
   on Raffi's request; A/B against Unified on `last.wav` gave an identical
   transcript at 697 ms vs 757 ms median decode, so v3 replaced Unified as

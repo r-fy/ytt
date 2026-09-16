@@ -212,6 +212,22 @@ Every `to` is also sent to the speech model as a hotword, which biases the
 model toward that spelling before any cleanup runs. Adding one needs a
 relaunch for the model side; the find-replace side is instant.
 
+## Optional LLM cleanup stage
+
+Off by default. When enabled, rules-cleaned text is additionally sent to a
+local Ollama process (127.0.0.1 only, no network egress) running
+`s1-mini` for punctuation, capitalization, and paragraph reformatting:
+
+```sh
+defaults write local.ytt.menubar llmCleanup -bool true
+```
+
+then relaunch. Requires Ollama installed and the `s1-mini-native` model
+built locally (GGUF-imported via `ollama create`, see
+`private/LLM_FORMAT_BENCH_S1MINI_30_2026-09-16.md`). If Ollama is slow or
+unreachable, YTT falls back to the rules-only text within about 9.5
+seconds; it never blocks the paste.
+
 ## Sharing rules across Macs
 
 By default the rules and history live in `~/Library/Application Support/YTT`.

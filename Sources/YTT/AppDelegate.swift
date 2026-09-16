@@ -155,16 +155,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
                 Log.info("TEXT decode=\(ms)ms audio=\(String(format: "%.2f", audioSeconds))s chars=\(text.count)")
                 // Both rule stages are idempotent, so this second full pass
                 // over already-cleaned words and sentences changes nothing.
-                let cleaned = self.cleanup.run(text)
-                if !cleaned.isEmpty {
-                    TextInjector.insert(cleaned, intendedTarget: target)
-                    self.statusBar.setLast(cleaned)
-                    History.record(
-                        app: NSWorkspace.shared.frontmostApplication?.localizedName ?? "?",
-                        raw: text, cleaned: cleaned,
-                        audioSeconds: audioSeconds, decodeMs: ms)
+                // The optional Ollama stage (off by default) races a hard
+                // deadline internally, so this completion always fires.
+                self.cleanup.run(text) { [weak self] cleaned in
+                    guard let self else { return }
+                    if !cleaned.isEmpty {
+                        TextInjector.insert(cleaned, intendedTarget: target)
+                        self.statusBar.setLast(cleaned)
+                        History.record(
+                            app: NSWorkspace.shared.frontmostApplication?.localizedName ?? "?",
+                            raw: text, cleaned: cleaned,
+                            audioSeconds: audioSeconds, decodeMs: ms)
+                    }
+                    self.statusBar.set(.idle)
                 }
-                self.statusBar.set(.idle)
             case .failure(let e):
                 Log.warn("transcribe failed after \(ms)ms: \(e.localizedDescription)")
                 self.statusBar.set(.error("Transcription failed"))
