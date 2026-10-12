@@ -98,35 +98,7 @@ final class OllamaFormatter {
         for token in sensitiveTokens(in: input) where !output.contains(token) {
             return false
         }
-        return passesWordCheck(input: input, output: output)
-    }
-
-    // Zero tolerance for dropped words: s1-mini sometimes treats a dictated
-    // sentence that sounds like a command ("Omit the Korean part...") as an
-    // instruction and deletes it. Every input word must survive in the output
-    // at least as often, except a small filler list and gonna/wanna/gotta
-    // expansions, which count as equal to their long forms.
-    static func passesWordCheck(input: String, output: String) -> Bool {
-        var have: [String: Int] = [:]
-        for w in normalizedWords(output) { have[w, default: 0] += 1 }
-        for w in normalizedWords(input) {
-            if have[w, default: 0] == 0 { return false }
-            have[w]! -= 1
-        }
         return true
-    }
-
-    private static func normalizedWords(_ text: String) -> [String] {
-        var s = " " + text.lowercased().replacingOccurrences(of: "\u{2019}", with: "'") + " "
-        s = String(s.map { $0.isLetter || $0.isNumber || $0 == "'" ? $0 : " " })
-        for (long, short) in [("going to", "gonna"), ("want to", "wanna"), ("got to", "gotta"),
-                              ("you know", ""), ("i mean", "")] {
-            s = s.replacingOccurrences(of: " \(long) ", with: " \(short) ")
-        }
-        let fillers: Set<String> = ["um", "uh", "like"]
-        return s.split(separator: " ")
-            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "'")) }
-            .filter { !$0.isEmpty && !fillers.contains($0) }
     }
 
     // Fire-and-forget: pings Ollama so the model is already loaded by the

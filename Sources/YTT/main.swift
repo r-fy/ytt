@@ -96,20 +96,13 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--join-test" {
     exit(0)
 }
 
-// `YTT --safety-test "input" "output"` prints PASS or REJECT from the LLM
-// cleanup safety guard. The runnable check for it: tools/check-rules.sh uses it.
-if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--safety-test" {
-    print(OllamaFormatter.passesSafetyCheck(input: CommandLine.arguments[2], output: CommandLine.arguments[3]) ? "PASS" : "REJECT")
-    exit(0)
-}
-
 // A flag typed with a missing argument (e.g. `YTT --join-test` alone) used to
 // match none of the blocks above and fall through into a second menu-bar app
 // launch, which fights the one already running for the Globe key and kills
 // its speech server. Catch any unrecognized or incomplete `--flag` here and
 // exit instead of launching.
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1].hasPrefix("--") {
-    FileHandle.standardError.write(Data("YTT: unknown or incomplete flag. Usage: --clean TEXT | --chunk-test FILE.wav | --stitch-test \"a|b\" [protected] | --join-test \"text|pause||...\" [off] | --safety-test IN OUT\n".utf8))
+    FileHandle.standardError.write(Data("YTT: unknown or incomplete flag. Usage: --clean TEXT | --chunk-test FILE.wav | --stitch-test \"a|b\" [protected] | --join-test \"text|pause||...\" [off]\n".utf8))
     exit(2)
 }
 

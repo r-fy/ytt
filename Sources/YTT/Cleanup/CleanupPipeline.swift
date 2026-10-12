@@ -61,7 +61,7 @@ final class CleanupPipeline {
                         Log.info("CLEANUP ollama changed the text")
                         completion(cleaned)
                     } else {
-                        Log.warn("CLEANUP ollama rejected: token or word check failed")
+                        Log.warn("CLEANUP ollama rejected: token check failed")
                         completion(rulesText)
                     }
                 case .failure(let error):

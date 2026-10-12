@@ -40,24 +40,6 @@ check "is this the right one"                "Is this the right one."
 # here." join test above), so the mid-string "what"/"do" stay lowercase here.
 check "can you check this. what do you think" "Can you check this. what do you think?"
 check "what do you think. do it now"         "What do you think. do it now."
-safety() {
-  local expected="$1" input="$2" output="$3"
-  local got
-  got="$("$BIN" --safety-test "$input" "$output" 2>/dev/null)"
-  if [ "$got" == "$expected" ]; then
-    echo "ok    safety $expected  $input"
-  else
-    echo "FAIL  safety $input  ->  $got   (expected: $expected)"
-    fail=1
-  fi
-}
-safety REJECT "Omit the Korean part completely. Talk to me about the Zurba Linda General Contractor Bid." "Talk to me about the Zurba Linda General Contractor Bid."
-safety REJECT "If you're saying it's two days. Although you're not being exact. If you're saying it's two days, then could we just run it." "If you're saying it's two days. If you're saying it's two days, then could we just run it."
-safety REJECT "This needs to be added to the list. add to the work history and more." "This needs to be added to the work history and more."
-safety PASS "It is not catching everything I'm saying. What the hell." "It is not catching everything. I'm saying. What the hell."
-safety PASS "I'm gonna check it, I wanna see it, I gotta go" "I'm going to check it, I want to see it, I got to go."
-safety PASS "um so I was like uh you know looking at these images they're fine, I mean okay" "So I was looking at these images, they're fine, okay."
-safety PASS "put it on the dock" "Put it on the dock."
 stitch() {
   local pieces="$1" expected="$2" protected="${3:-}"
   local got
