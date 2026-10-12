@@ -71,6 +71,7 @@ final class OllamaFormatter {
             "raw": true,
             "stream": false,
             "options": ["temperature": 0, "num_ctx": 4096],
+            "keep_alive": -1,
         ]
         var req = URLRequest(url: OllamaFormatter.url)
         req.httpMethod = "POST"
@@ -97,7 +98,101 @@ final class OllamaFormatter {
         for token in sensitiveTokens(in: input) where !output.contains(token) {
             return false
         }
+        return passesWordCheck(input: input, output: output)
+    }
+
+    // Zero tolerance for dropped words: s1-mini sometimes treats a dictated
+    // sentence that sounds like a command ("Omit the Korean part...") as an
+    // instruction and deletes it. Every input word must survive in the output
+    // at least as often, except a small filler list and gonna/wanna/gotta
+    // expansions, which count as equal to their long forms.
+    static func passesWordCheck(input: String, output: String) -> Bool {
+        var have: [String: Int] = [:]
+        for w in normalizedWords(output) { have[w, default: 0] += 1 }
+        for w in normalizedWords(input) {
+            if have[w, default: 0] == 0 { return false }
+            have[w]! -= 1
+        }
         return true
+    }
+
+    private static func normalizedWords(_ text: String) -> [String] {
+        var s = " " + text.lowercased().replacingOccurrences(of: "\u{2019}", with: "'") + " "
+        s = String(s.map { $0.isLetter || $0.isNumber || $0 == "'" ? $0 : " " })
+        for (long, short) in [("going to", "gonna"), ("want to", "wanna"), ("got to", "gotta"),
+                              ("you know", ""), ("i mean", "")] {
+            s = s.replacingOccurrences(of: " \(long) ", with: " \(short) ")
+        }
+        let fillers: Set<String> = ["um", "uh", "like"]
+        return s.split(separator: " ")
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "'")) }
+            .filter { !$0.isEmpty && !fillers.contains($0) }
+    }
+
+    // Fire-and-forget: pings Ollama so the model is already loaded by the
+    // time a cleanup request comes in, instead of paying the ~14 s cold-start
+    // cost against the 9 s request timeout above. At boot YTT can start in
+    // the same second as `ollama serve`, so a failed ping retries every 5 s
+    // for up to 3 minutes. Also called at record start, which re-warms a
+    // model Ollama unloaded or restarted. One loop at a time.
+    private static let warmQueue = DispatchQueue(label: "ytt.ollama.warm")
+    private static var warming = false
+    private static let warmSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 30
+        cfg.timeoutIntervalForResource = 30
+        return URLSession(configuration: cfg)
+    }()
+
+    static func warmUp() {
+        guard isEnabled else { return }
+        let start: Bool = warmQueue.sync {
+            if warming { return false }
+            warming = true
+            return true
+        }
+        guard start else { return }
+        DispatchQueue.global(qos: .utility).async {
+            let body: [String: Any] = [
+                "model": model,
+                "prompt": "",
+                "stream": false,
+                "keep_alive": -1,
+            ]
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+            let deadline = Date().addingTimeInterval(180)
+            var lastFailure = ""
+            while true {
+                let done = DispatchSemaphore(value: 0)
+                var ok = false
+                warmSession.dataTask(with: req) { _, response, error in
+                    if let error {
+                        lastFailure = error.localizedDescription
+                    } else if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                        lastFailure = "HTTP \(http.statusCode)"
+                    } else {
+                        ok = true
+                    }
+                    done.signal()
+                }.resume()
+                done.wait()
+                if ok {
+                    Log.info("OllamaFormatter warm")
+                    break
+                }
+                if Date().addingTimeInterval(5) >= deadline {
+                    Log.warn("OllamaFormatter.warmUp gave up after 3 min: \(lastFailure)")
+                    break
+                }
+                Log.info("OllamaFormatter.warmUp retry in 5 s: \(lastFailure)")
+                Thread.sleep(forTimeInterval: 5)
+            }
+            warmQueue.sync { warming = false }
+        }
     }
 
     private static func sensitiveTokens(in text: String) -> [String] {

@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Log.info("YTT launched pid=\(getpid()) accessibility=\(AXIsProcessTrusted())")
+        OllamaFormatter.warmUp()
         statusBar = StatusBarController()
         statusBar.onQuit = { [weak self] in self?.quit() }
         statusBar.onRestart = { [weak self] in self?.restart() }
@@ -94,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, GlobeKeyListenerDelega
         rules.reloadIfChanged()
         recorder.chunking = rules.chunkedDecodeEnabled
         if recorder.start() {
+            OllamaFormatter.warmUp()
             var protectedWords: Set<String> = []
             for term in rules.dictionaryTerms {
                 protectedWords.insert(term.lowercased())
@@ -398,6 +400,22 @@ private final class Dictation {
         settle()
     }
 
+    // The engine has occasionally returned an empty transcript for very
+    // short captures (well under a second of speech) even though the same
+    // audio decodes fine when replayed standalone — a live-capture-timing
+    // edge case, not a hard duration floor the model needs. Padding short
+    // clips with trailing silence before sending them works around it.
+    // 2 s covers the shortest real dictations (a couple of words) with
+    // margin; longer captures are never touched, so normal timing and
+    // decode cost are unaffected.
+    private static let minPadSamples = Int(AudioRecorder.sampleRate * 2.0)
+    private static let retryPadSamples = Int(AudioRecorder.sampleRate * 4.0)
+
+    private static func padded(_ samples: [Float], toAtLeast minCount: Int) -> [Float] {
+        guard samples.count < minCount else { return samples }
+        return samples + [Float](repeating: 0, count: minCount - samples.count)
+    }
+
     private func pump() {
         // failure is not part of this guard: the server most likely crashed
         // and restarted, so a chunk queued after release is worth one more
@@ -406,15 +424,31 @@ private final class Dictation {
         guard !sending, !queue.isEmpty else { return }
         let job = queue.removeFirst()
         sending = true
+        attempt(job, retried: false)
+    }
+
+    // Sends one job to the engine, padded to a safe floor when it is short.
+    // If a short job still comes back empty, pads further and tries exactly
+    // once more before accepting the result — this must never turn a real
+    // silent recording into a repeated stall, so the retry only fires for
+    // jobs that were under the floor to begin with.
+    private func attempt(_ job: (index: Int, samples: [Float]), retried: Bool) {
         let t0 = Date()
+        let floor = retried ? Dictation.retryPadSamples : Dictation.minPadSamples
+        let toSend = Dictation.padded(job.samples, toAtLeast: floor)
+        let seconds = String(format: "%.2f", Double(job.samples.count) / AudioRecorder.sampleRate)
         // Strong capture on purpose: after release nothing else holds this
         // object, and the reply (or the 30 s watchdog) must still reach it.
-        engine.transcribe(samples: job.samples) { result in
+        engine.transcribe(samples: toSend) { result in
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
-            let seconds = String(format: "%.2f", Double(job.samples.count) / AudioRecorder.sampleRate)
-            self.sending = false
             switch result {
             case .success(let text):
+                if !retried, job.samples.count < Dictation.minPadSamples,
+                   text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Log.info("SHORT_AUDIO padded and retried")
+                    self.attempt(job, retried: true)
+                    return
+                }
                 Log.info("CHUNK \(job.index) decode=\(ms)ms audio=\(seconds)s chars=\(text.count)")
                 self.texts[job.index] = self.words(text)
             case .failure(let e):
@@ -431,6 +465,7 @@ private final class Dictation {
                     self.queue.removeAll()
                 }
             }
+            self.sending = false
             self.pump()
             self.settle()
         }
